@@ -101,7 +101,6 @@ def render(c):
         'smtp_tls_mandatory_protocols': '>=TLSv1.2', 'message_size_limit': c['MESSAGE_SIZE_LIMIT'],
         'maillog_file': '/dev/stdout', 'smtpd_banner': '$myhostname ESMTP',
         'disable_vrfy_command': 'yes', 'smtpd_helo_required': 'yes', 'biff': 'no',
-        'append_dot_mydomain': 'no', 'readme_directory': 'no', 'manpage_directory': 'no',
-        'html_directory': 'no',
+        'append_dot_mydomain': 'no', 'readme_directory': 'no',
     }
     return ''.join(f'{key} = {value}\n' for key, value in settings.items())

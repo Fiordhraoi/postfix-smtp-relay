@@ -1,6 +1,7 @@
 FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 RUN printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d \
+    && find /etc/dpkg/dpkg.cfg.d -type f -exec sed -i '\|path-exclude=/usr/share/man/|d' {} + \
     && apt-get update \
     && apt-get install -y --no-install-recommends postfix sasl2-bin libsasl2-modules ca-certificates openssl python3 \
     && rm -rf /var/lib/apt/lists/* \
