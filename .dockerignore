@@ -1,0 +1,11 @@
+.git
+.env
+.env.*
+secrets
+certs
+backup
+*.key
+*.pem
+*.p12
+**/__pycache__
+tests

@@ -1,0 +1,25 @@
+services:
+  smtp-relay:
+    build: .
+    image: postfix-smtp-relay:local
+    network_mode: host
+    env_file:
+      - path: .env
+        format: raw
+    restart: unless-stopped
+    stop_grace_period: 60s
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID, NET_BIND_SERVICE, KILL]
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - queue:/var/spool/postfix
+      - tls:/var/lib/postfix-tls
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '5'
+volumes:
+  queue:
+  tls:

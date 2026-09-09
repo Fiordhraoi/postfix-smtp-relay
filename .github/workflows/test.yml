@@ -1,0 +1,13 @@
+name: Test
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s tests -v
+      - run: cp .env.example .env && docker compose config --quiet
+      - run: python3 tests/integration.py
