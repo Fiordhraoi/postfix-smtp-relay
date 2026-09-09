@@ -20,3 +20,5 @@ discard   unix  -       -       n       -       -       discard
 anvil     unix  -       -       n       -       1       anvil
 scache    unix  -       -       n       -       1       scache
 postlog   unix-dgram n  -       n       -       1       postlogd
+proxymap  unix  -       -       n       -       -       proxymap
+proxywrite unix -       -       n       -       1       proxymap

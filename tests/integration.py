@@ -20,7 +20,7 @@ def docker(*args):
 def launch(name, *args):
     containers.append(name)
     caps = ['--cap-drop=ALL', '--security-opt=no-new-privileges:true']
-    for cap in ('CHOWN', 'DAC_OVERRIDE', 'FOWNER', 'SETGID', 'SETUID', 'NET_BIND_SERVICE', 'KILL'):
+    for cap in ('CHOWN', 'DAC_OVERRIDE', 'FOWNER', 'FSETID', 'SETGID', 'SETUID', 'NET_BIND_SERVICE', 'KILL'):
         caps.append('--cap-add=' + cap)
     return docker('run', '-d', '--name', name, '--network', network, *caps, *args)
 

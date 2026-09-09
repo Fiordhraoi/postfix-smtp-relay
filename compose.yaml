@@ -9,7 +9,7 @@ services:
     restart: unless-stopped
     stop_grace_period: 60s
     cap_drop: [ALL]
-    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID, NET_BIND_SERVICE, KILL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, FSETID, SETGID, SETUID, NET_BIND_SERVICE, KILL]
     security_opt:
       - no-new-privileges:true
     volumes:

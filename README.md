@@ -63,7 +63,7 @@ decide whether a valid CIDR is appropriate for your site.
 
 The container needs root for Postfix master, low ports, ownership changes and
 privilege dropping. Worker services use Postfix's packaged users. Compose drops
-all capabilities and restores CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID,
+all capabilities and restores CHOWN, DAC_OVERRIDE, FOWNER, FSETID, SETGID, SETUID,
 NET_BIND_SERVICE and KILL. It does not use privileged mode, a Docker socket,
 NET_ADMIN, or extra exposed services. Services are unchrooted to access DNS,
 SASL and mounted certificates; the container provides filesystem isolation.
