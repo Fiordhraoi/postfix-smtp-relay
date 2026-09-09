@@ -8,11 +8,12 @@ MIT licensed.
 
 ## Validation status
 
-The configuration unit tests pass in the authoring environment. Docker and WSL
-were unavailable there, so the image build, Postfix runtime and SMTP integration
-suite have **not yet been executed**. GitHub Actions runs the supplied Docker
-suite. Require a successful run and the site acceptance checks below before
-production rollout. This repository is not a claim of completed production certification.
+GitHub Actions has successfully built the image and passed the unit tests,
+Compose validation and live SMTP integration suite on Ubuntu 24.04.
+See the [successful validation run](https://github.com/Fiordhraoi/postfix-smtp-relay/actions/runs/34406643929)
+and [validation record](VALIDATION.md). Perform the site acceptance checks below
+before production rollout, including real client IPs, firewall rules, certificate
+trust and your Microsoft 365 connector.
 
 ## Quick start
 
@@ -22,7 +23,7 @@ Ensure ports 25 and 587 are free; stop the old host Postfix service before deplo
 Set firewall rules before starting the container.
 
 ```sh
-git clone <your-repository-url> smtp-relay
+git clone https://github.com/Fiordhraoi/postfix-smtp-relay.git smtp-relay
 cd smtp-relay
 cp .env.example .env
 chmod 600 .env
