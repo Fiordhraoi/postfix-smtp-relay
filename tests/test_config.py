@@ -9,8 +9,11 @@ from config import validate, render
 
 class ConfigurationTests(unittest.TestCase):
     def env(self, **overrides):
-        return dict(SMTP_HOSTNAME='smtp01.example.local', MAIL_DOMAIN='example.com',
-                    RELAY_HOST='mx.example.com', TRUSTED_NETWORKS='10.10.0.0/16,10.20.0.0/16,2001:db8::/32', **overrides)
+        env = dict(SMTP_HOSTNAME='smtp01.example.local', MAIL_DOMAIN='example.com',
+                   RELAY_HOST='mx.example.com', TRUSTED_NETWORKS='10.10.0.0/16,10.20.0.0/16,2001:db8::/32',
+                   RELAY_AUTH_ENABLED='false')
+        env.update(overrides)
+        return env
 
     def test_generation(self):
         text = render(validate(self.env()))
@@ -63,8 +66,44 @@ class ConfigurationTests(unittest.TestCase):
     def test_ipv6_relay_and_size(self):
         env = self.env(MESSAGE_SIZE_LIMIT='1024'); env['RELAY_HOST'] = '2001:db8::1'
         text = render(validate(env))
-        self.assertIn('relayhost = [IPv6:2001:db8::1]:25', text)
+        self.assertIn('relayhost = [IPv6:2001:db8::1]:587', text)
         self.assertIn('message_size_limit = 1024', text)
+
+    def test_upstream_defaults_and_tls(self):
+        env = self.env(RELAY_AUTH_USERNAME='relay@example.com', RELAY_AUTH_PASSWORD='a$!\\,: pass')
+        del env['RELAY_AUTH_ENABLED']
+        c = validate(env)
+        text = render(c)
+        for value in ('relayhost = [mx.example.com]:587', 'smtp_sasl_auth_enable = yes',
+                      'smtp_tls_security_level = secure', 'hash:/etc/postfix/relay_passwd'):
+            self.assertIn(value, text)
+        self.assertNotIn(c['relay_password'], text)
+        for level in ('none', 'may'):
+            with self.subTest(level=level), self.assertRaisesRegex(ValueError, 'plaintext fallback'):
+                validate(dict(env, OUTBOUND_TLS_LEVEL=level))
+
+    def test_upstream_missing_credentials(self):
+        for changes in ({}, {'RELAY_AUTH_USERNAME': 'relay'},
+                        {'RELAY_AUTH_USERNAME': 'bad:user', 'RELAY_AUTH_PASSWORD': 'secret'},
+                        {'RELAY_AUTH_USERNAME': 'relay', 'RELAY_AUTH_PASSWORD': 'secret\n'},
+                        {'RELAY_AUTH_USERNAME': 'relay', 'RELAY_AUTH_PASSWORD': 'secret '},
+                        {'RELAY_AUTH_ENABLED': 'yes'}, {'RELAY_AUTH_PASSWORD_FILE': '/missing'},
+                        {'OUTBOUND_TLS_CA_FILE': '/missing'}):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                env = self.env(RELAY_AUTH_ENABLED='true'); env.update(changes); validate(env)
+
+    def test_upstream_secret_precedence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            secret = Path(directory) / 'relay-password'
+            secret.write_bytes(b'a$!\\,: pass\r\n')
+            c = validate(self.env(RELAY_AUTH_ENABLED='true', RELAY_AUTH_USERNAME='relay@example.com',
+                                  RELAY_AUTH_PASSWORD='wrong', RELAY_AUTH_PASSWORD_FILE=str(secret)))
+            self.assertEqual(c['relay_password'], 'a$!\\,: pass')
+
+    def test_unauthenticated_port25_alternative(self):
+        text = render(validate(self.env(RELAY_PORT='25', OUTBOUND_TLS_LEVEL='may')))
+        self.assertIn('relayhost = [mx.example.com]:25', text)
+        self.assertIn('smtp_sasl_auth_enable = no', text)
 
 
 if __name__ == '__main__':

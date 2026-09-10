@@ -1,5 +1,28 @@
 # Validation record
 
+## Authenticated upstream defaults — 2026-09-10
+
+Local Ubuntu 24.04 / WSL 2 / Docker Desktop validation passed for the change
+introducing default upstream authentication on port 587 with verified STARTTLS:
+
+- All 11 configuration unit tests passed, including missing credentials,
+  secret-file precedence, unsafe TLS-policy rejection and the explicit port 25 alternative.
+- Compose configuration validation and `git diff --check` passed.
+- The Docker integration suite passed against a freshly built image.
+- Default port 587 delivery authenticated to an isolated TLS SMTP server using
+  a mounted password file with special characters, overriding an incorrect environment password.
+- The generated credential database was mode 0600 with no plaintext source file.
+- Wrong credentials, an untrusted certificate and missing STARTTLS deferred
+  messages without delivering them to the mock server.
+- Existing inbound ports, trust restrictions, TLS/AUTH, unauthenticated upstream
+  port 25 and queue persistence checks continued to pass.
+
+No tests contacted a real mail provider. Production provider credentials and
+delivery still require site acceptance. The Test and publish workflow repeats
+these tests before publishing the image.
+
+## Initial validation
+
 On 2026-09-09, [GitHub Actions run #4](https://github.com/Fiordhraoi/postfix-smtp-relay/actions/runs/34406643929)
 passed for implementation commit `46013c9d5e91bfa9f36f021095b35b79fcedbd3e`
 on an Ubuntu 24.04 GitHub-hosted runner.

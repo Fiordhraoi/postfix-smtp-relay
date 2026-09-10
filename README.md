@@ -3,7 +3,9 @@
 A reusable SMTP relay for internal devices and applications. Ubuntu 24.04,
 Postfix and Cyrus SASL provide ports 25 and 587, optional LOGIN/PLAIN client
 authentication, inbound STARTTLS, and forwarding to one upstream SMTP server.
-There are no mailboxes, IMAP services, web interfaces or outbound credentials.
+The upstream defaults to port 587 with username/password authentication and
+certificate-verified STARTTLS. Other ports and unauthenticated upstreams are configurable.
+There are no mailboxes, IMAP services or web interfaces.
 Licensed under GNU AGPL version 3 only (`AGPL-3.0-only`).
 
 **New to Docker? Start with the [barebones setup guide](docs/BAREBONES-SETUP.md)** for installation, pulling the image, configuration and your first test email.
@@ -35,7 +37,7 @@ Compose validation and live SMTP integration suite on Ubuntu 24.04.
 See the [successful validation run](https://github.com/Fiordhraoi/postfix-smtp-relay/actions/runs/34406643929)
 and [validation record](VALIDATION.md). Perform the site acceptance checks below
 before production rollout, including real client IPs, certificate
-trust and your Microsoft 365 connector.
+trust and your upstream mail provider.
 
 ## Quick start
 
@@ -48,7 +50,7 @@ git clone https://github.com/Fiordhraoi/postfix-smtp-relay.git smtp-relay
 cd smtp-relay
 cp .env.example .env
 chmod 600 .env
-# Edit .env: hostname, domain, trusted client CIDRs and upstream host.
+# Edit .env: hostname, domain, trusted client CIDRs, upstream host and login.
 docker compose pull
 docker compose up -d
 docker compose ps
@@ -57,7 +59,7 @@ docker compose logs -f smtp-relay
 
 Compose pulls the ready-made Linux amd64 image from
 `ghcr.io/fiordhraoi/postfix-smtp-relay:latest`. No local build is needed.
-The example settings are placeholders, not a working M365 tenant. Values in `.env` are literal: **do not quote them**.
+The example settings are placeholders; supply your real upstream login. Values in `.env` are literal: **do not quote them**.
 Compose raw format preserves dollar signs, hashes, spaces and backslashes in
 passwords. Prefer a secret file for production. Never commit `.env`.
 
@@ -104,13 +106,18 @@ changed environment variables.
 | `MAIL_DOMAIN` | required | Domain for locally originated mail, not a mailbox domain |
 | `TRUSTED_NETWORKS` | required | Comma-separated canonical IPv4/IPv6 CIDRs; no implicit bridge trust |
 | `RELAY_HOST` | required | Bare DNS name or IP, without brackets or port |
-| `RELAY_PORT` | `25` | Upstream port, 1–65535 |
+| `RELAY_PORT` | `587` | Upstream STARTTLS port, 1–65535; implicit TLS on 465 is not supported |
+| `RELAY_AUTH_ENABLED` | `true` | Enable upstream LOGIN/PLAIN authentication |
+| `RELAY_AUTH_USERNAME` | empty | Required upstream username when relay AUTH is enabled; no whitespace or colon |
+| `RELAY_AUTH_PASSWORD` | empty | Required upstream password; no control characters or trailing whitespace |
+| `RELAY_AUTH_PASSWORD_FILE` | empty | UTF-8 secret file; takes precedence over upstream environment password |
 | `MESSAGE_SIZE_LIMIT` | `52428800` | Maximum message bytes, 1–2147483647; MIME encoding counts |
 | `SMTP_AUTH_ENABLED` | `false` | Enable local client SMTP AUTH |
 | `SMTP_AUTH_USERNAME` | empty | Required when AUTH enabled; 1–64 letters, digits, `_`, `.`, `-` |
 | `SMTP_AUTH_PASSWORD` | empty | Single-line password; environment visible to Docker administrators |
 | `SMTP_AUTH_PASSWORD_FILE` | empty | Readable UTF-8 secret file, preferred over environment password |
-| `OUTBOUND_TLS_LEVEL` | `may` | `none`, `may`, `encrypt`, `verify`, or `secure` |
+| `OUTBOUND_TLS_LEVEL` | `secure` | `none`, `may`, `encrypt`, `verify`, or `secure`; AUTH requires `encrypt` or stronger |
+| `OUTBOUND_TLS_CA_FILE` | system CA bundle | Optional absolute mounted CA bundle path for a private upstream issuer |
 | `TLS_CERT_FILE` | empty | Absolute mounted PEM certificate/full-chain path |
 | `TLS_KEY_FILE` | empty | Matching unencrypted PEM private key path |
 | `ALLOW_EMPTY_TRUSTED_NETWORKS` | `false` | Permit no additional trusted CIDRs; loopback remains trusted |
@@ -122,9 +129,59 @@ contain only letters, digits, underscores, dots, slashes and hyphens. Secret
 files may contain one final LF or CRLF, which is removed; spaces are preserved.
 A specified missing secret fails startup even if AUTH is disabled.
 
-Outbound SASL is always disabled. Future upstream authentication can be added
-separately via `smtp_sasl_*` and a dedicated secret map without changing inbound
-`smtpd_sasl_*`. It is intentionally not implemented here.
+## Upstream server and login
+
+The default is authenticated SMTP submission over STARTTLS on port 587:
+
+```dotenv
+RELAY_HOST=smtp.example.com
+RELAY_PORT=587
+RELAY_AUTH_ENABLED=true
+RELAY_AUTH_USERNAME=relay@example.com
+RELAY_AUTH_PASSWORD=replace-with-your-upstream-password
+OUTBOUND_TLS_LEVEL=secure
+```
+
+Use the hostname and credentials supplied by your mail provider. The provider
+must support password-based LOGIN or PLAIN; OAuth-only authentication and implicit
+TLS on port 465 are not implemented. `secure` verifies the upstream certificate
+and hostname. Missing credentials fail startup. These `RELAY_AUTH_*` settings
+are separate from `SMTP_AUTH_*`, which control devices connecting to this relay.
+
+For a secret file, create `secrets/relay_auth_password`, restrict its permissions,
+and add this to `compose.override.yaml` (merge with existing overrides):
+
+```yaml
+services:
+  smtp-relay:
+    secrets:
+      - relay_auth_password
+secrets:
+  relay_auth_password:
+    file: ./secrets/relay_auth_password
+```
+
+Set `RELAY_AUTH_PASSWORD_FILE=/run/secrets/relay_auth_password` and clear
+`RELAY_AUTH_PASSWORD`. A final LF or CRLF is removed. The root-only Postfix
+credential database is recreated at startup without a plaintext source file.
+Compose secrets are mounted files, not an encrypted store; Docker administrators
+can access credentials. Recreate the container after rotation.
+
+For an upstream that trusts your IP and requires no login, explicitly choose:
+
+```dotenv
+RELAY_HOST=your-upstream.example.com
+RELAY_PORT=25
+RELAY_AUTH_ENABLED=false
+RELAY_AUTH_USERNAME=
+RELAY_AUTH_PASSWORD=
+RELAY_AUTH_PASSWORD_FILE=
+OUTBOUND_TLS_LEVEL=may
+```
+
+`may` permits plaintext fallback; keep `secure` if the upstream supports verified
+TLS, or select the policy required by your administrator. Any STARTTLS port can
+be configured with `RELAY_PORT`.
 
 ## Anonymous and authenticated clients
 
@@ -177,11 +234,14 @@ host private key to root. Supply the leaf certificate followed by intermediate
 certificates. Restart after renewal so Postfix reads the new files. Clients must
 trust the issuer and connect using a matching certificate hostname.
 
+Outbound `secure` is the default. A private CA can be mounted read-only and
+selected with `OUTBOUND_TLS_CA_FILE=/certs/upstream-ca.crt`.
 Outbound `may` offers opportunistic encryption and permits plaintext fallback.
 `encrypt` requires TLS but does not authenticate the server certificate; `verify`
 and `secure` also apply Postfix certificate verification/name policies. Use
 `secure` with a valid upstream DNS name and trusted certificate when appropriate.
-`none` disables outbound TLS. Neither a mounted inbound certificate nor local
+`none` disables outbound TLS. `may` and `none` require `RELAY_AUTH_ENABLED=false`;
+credentials cannot be configured with plaintext fallback. Neither a mounted inbound certificate nor local
 AUTH configures certificate-based M365 connector authentication.
 
 ## Docker networking
@@ -207,6 +267,9 @@ Sources: [Docker host networking](https://docs.docker.com/engine/network/drivers
 [Postfix parameters](https://www.postfix.org/postconf.5.html).
 
 ## Microsoft 365 connector prerequisites
+
+This is an alternative to the default authenticated port 587 setup. Set
+`RELAY_AUTH_ENABLED=false`, `RELAY_PORT=25`, and clear `RELAY_AUTH_*` credentials.
 
 Use your tenant's MX endpoint, such as
 `example-com.mail.protection.outlook.com`, on TCP 25. Configure an Exchange Online
@@ -234,7 +297,10 @@ network with a mock upstream, and probes both ports from a separate client. It
 checks trusted anonymous acceptance, untrusted rejection, AUTH hidden before TLS,
 LOGIN and PLAIN after TLS, wrong-password rejection, AUTH disabled, advertised
 message size, delivery to the mock, `postfix check`, `postconf -n`, health and
-queue persistence across container recreation. It uses the same capability
+queue persistence across container recreation. It also tests authenticated
+upstream delivery on default port 587 with verified TLS, secret-file precedence,
+and rejection of wrong passwords, untrusted certificates and missing STARTTLS.
+It uses the same capability
 restrictions as Compose and cleans up only its uniquely named resources.
 Image package downloads require Internet access; SMTP tests never contact M365.
 
@@ -337,6 +403,12 @@ starting. Test restoration off-network to avoid duplicate deliveries. Do not
 restore an old queue over a running or nonempty queue.
 
 To update after reviewing changes and taking a backup:
+
+**Upgrading an older port 25 deployment:** defaults now require an upstream
+login on port 587 and verified TLS. To retain an IP-trusted upstream, set
+`RELAY_AUTH_ENABLED=false`, `RELAY_PORT=25`, and your chosen
+`OUTBOUND_TLS_LEVEL` explicitly before recreating the container. Existing
+device authentication settings remain independent.
 
 ```sh
 git pull --ff-only

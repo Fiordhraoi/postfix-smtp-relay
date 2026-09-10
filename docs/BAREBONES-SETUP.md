@@ -19,18 +19,20 @@ Ask your network/mail administrator for:
 | DNS name pointing to that IP | `smtp01.example.local` | Relay identity |
 | Your email domain | `example.com` | Sender domain |
 | IP of a permitted copier/application | `10.10.1.50` | Anonymous relay permission |
-| Upstream mail server | `example-com.mail.protection.outlook.com` | Where mail goes next |
-| Upstream port | `25` | Connection to the upstream |
+| Upstream mail server | `smtp.example.com` | Where mail goes next |
+| Upstream port | `587` | STARTTLS connection to the upstream |
+| Upstream username | `relay@example.com` | Login supplied by your mail provider |
+| Upstream password | Your provider's SMTP password | Authentication to the upstream |
 | A test sender and recipient | Addresses you control | Delivery test |
 
 **Replace all example values with your real settings.** Configuring a hostname
 here does not create a DNS record or give the server a static IP.
 
-For Microsoft 365, your administrator must already have configured the Exchange
-Online connector to trust your site's static public/NAT IP. The sender domain
-must be accepted by your tenant, and outbound TCP 25 must be allowed. This guide
-does not create that connector. See [M365 prerequisites](../README.md#microsoft-365-connector-prerequisites).
-Your public NAT IP and your copier's LAN IP serve different purposes.
+This guide assumes an upstream that accepts username/password authentication
+on port 587 with STARTTLS and a trusted certificate. Ask your provider for the
+correct SMTP hostname and login; OAuth-only services are not supported.
+An IP-trusted server without a login is also supported; see the alternative in
+step 4 and [M365 connector prerequisites](../README.md#microsoft-365-connector-prerequisites).
 
 ## 2. Install Docker on the Ubuntu server
 
@@ -128,8 +130,12 @@ Change these existing lines. Do not add duplicate lines. Example:
 SMTP_HOSTNAME=smtp01.example.local
 MAIL_DOMAIN=example.com
 TRUSTED_NETWORKS=10.10.1.50/32
-RELAY_HOST=example-com.mail.protection.outlook.com
-RELAY_PORT=25
+RELAY_HOST=smtp.example.com
+RELAY_PORT=587
+RELAY_AUTH_ENABLED=true
+RELAY_AUTH_USERNAME=relay@example.com
+RELAY_AUTH_PASSWORD=replace-with-your-upstream-password
+RELAY_AUTH_PASSWORD_FILE=
 ```
 
 What each setting means:
@@ -143,7 +149,12 @@ What each setting means:
   use it only if that is intentional.
 - **RELAY_HOST:** the upstream mail server, not this relay's own address.
   Enter just the hostname, without `https://`, brackets or a port.
-- **RELAY_PORT:** the upstream port. For this M365 connector setup, use 25.
+- **RELAY_PORT:** the upstream port; 587 is the default. This uses STARTTLS,
+  not implicit TLS on port 465.
+- **RELAY_AUTH_USERNAME / RELAY_AUTH_PASSWORD:** the upstream server's login.
+  These are separate from any login you choose for your copier or application.
+  Leave `RELAY_AUTH_PASSWORD_FILE` blank for this simple method; see the
+  [upstream secret-file option](../README.md#upstream-server-and-login) for production.
 
 For the simplest anonymous-device setup, keep these values:
 
@@ -153,21 +164,40 @@ SMTP_AUTH_ENABLED=false
 SMTP_AUTH_USERNAME=smtprelay
 SMTP_AUTH_PASSWORD=
 SMTP_AUTH_PASSWORD_FILE=
-OUTBOUND_TLS_LEVEL=may
+OUTBOUND_TLS_LEVEL=secure
+OUTBOUND_TLS_CA_FILE=
 TLS_CERT_FILE=
 TLS_KEY_FILE=
 ALLOW_EMPTY_TRUSTED_NETWORKS=false
 ```
 
 The size limit is 50 MiB for the entire encoded message, not just the attachment.
-`may` uses outbound TLS when available; use `encrypt` if your upstream
-requires TLS. Blank certificate settings generate a persistent self-signed
+`secure` requires encrypted delivery and verifies the upstream's certificate
+and hostname. Leave the CA setting blank for a public trusted issuer; private
+issuers need the [custom CA setting](../README.md#tls).
+Blank inbound certificate settings generate a persistent self-signed
 certificate at first startup. It expires after 365 days and needs planned renewal.
 Clients that validate certificates will need a trusted certificate instead;
 see [certificate setup](../README.md#tls).
 
 Do not put quotes around values or spaces around `=`. Do not commit `.env`
 to GitHub. Save in nano with **Ctrl+O**, press **Enter**, then exit with **Ctrl+X**.
+
+**Alternative: upstream without a login.** If your administrator specifies an
+IP-trusted server on port 25, replace the upstream host with theirs and change:
+
+```dotenv
+RELAY_PORT=25
+RELAY_AUTH_ENABLED=false
+RELAY_AUTH_USERNAME=
+RELAY_AUTH_PASSWORD=
+RELAY_AUTH_PASSWORD_FILE=
+OUTBOUND_TLS_LEVEL=may
+```
+
+`may` permits unencrypted delivery when TLS is unavailable. Keep `secure` when
+supported, or use your administrator's required TLS policy. Other STARTTLS ports
+can be selected with `RELAY_PORT`; see the [full configuration reference](../README.md#configuration-reference).
 
 ## 5. Check that the SMTP ports are free
 
@@ -220,7 +250,8 @@ Use these settings in the device's email/SMTP page:
 
 Send the device's test email to a mailbox you control, and watch the relay logs.
 With authentication disabled, trusted devices can also send without TLS;
-credentials are never needed for the basic setup.
+the device needs no login. The relay still uses your configured upstream login
+when forwarding mail.
 
 Look for the device's real source IP in `connect from` log lines, then a
 delivery line containing `status=sent`. That means the upstream accepted the
@@ -267,7 +298,8 @@ A plain `restart` does not load changes to `.env`.
 | Device cannot connect | Check server address, port and whether the relay is healthy |
 | Relay access denied | Compare the logged source IP with `TRUSTED_NETWORKS` |
 | AUTH unavailable | Enable AUTH, negotiate STARTTLS, and check certificate trust |
-| Mail is deferred | Check upstream DNS, outbound TCP 25 and M365 connector/public IP |
+| Mail is deferred | Check upstream hostname, port (normally 587), login and certificate trust |
+| Upstream authentication failed | Check `RELAY_AUTH_*` credentials and whether the provider permits SMTP password login |
 | No email despite healthy status | Inspect delivery logs and the queue |
 
 See queued mail with:

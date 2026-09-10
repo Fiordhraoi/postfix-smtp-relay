@@ -5,7 +5,7 @@ import signal
 import subprocess
 import sys
 from pathlib import Path
-from config import validate, render
+from config import validate, render, relay_destination
 
 
 def run(*args, **kwargs):
@@ -45,9 +45,20 @@ def prepare():
             input=(c['password'] + '\n').encode(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         shutil.chown(database, user='root', group='postfix')
         database.chmod(0o640)
+    # The map is readable only by root. Postfix opens it before dropping privileges.
+    # Credentials are fed to postmap through stdin, never command-line arguments.
+    relay_map = Path('/etc/postfix/relay_passwd.db')
+    relay_map.unlink(missing_ok=True)
+    if c['relay_auth']:
+        run('postmap', '-i', 'hash:/etc/postfix/relay_passwd',
+            input=(relay_destination(c) + '\t' + c['relay_username'] + ':' + c['relay_password'] + '\n').encode(),
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        relay_map.chmod(0o600)
     # Remove secrets from the environment inherited by every Postfix child.
     os.environ.pop('SMTP_AUTH_PASSWORD', None)
+    os.environ.pop('RELAY_AUTH_PASSWORD', None)
     c['password'] = ''
+    c['relay_password'] = ''
     run('postfix', 'set-permissions')
     run('postfix', 'check')
     run('postconf', '-n')
