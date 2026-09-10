@@ -6,6 +6,8 @@ authentication, inbound STARTTLS, and forwarding to one upstream SMTP server.
 There are no mailboxes, IMAP services, web interfaces or outbound credentials.
 Licensed under GNU AGPL version 3 only (`AGPL-3.0-only`).
 
+**New to Docker? Start with the [barebones setup guide](docs/BAREBONES-SETUP.md)** for installation, pulling the image, configuration and your first test email.
+
 ## License
 
 Copyright (c) 2026 SMTP Relay Contributors.
@@ -48,13 +50,15 @@ cd smtp-relay
 cp .env.example .env
 chmod 600 .env
 # Edit .env: hostname, domain, trusted client CIDRs and upstream host.
+docker compose pull
 docker compose up -d
 docker compose ps
 docker compose logs -f smtp-relay
 ```
 
-The first launch builds the local image. The example settings are placeholders,
-not a working M365 tenant. Values in `.env` are literal: **do not quote them**.
+Compose pulls the ready-made Linux amd64 image from
+`ghcr.io/fiordhraoi/postfix-smtp-relay:latest`. No local build is needed.
+The example settings are placeholders, not a working M365 tenant. Values in `.env` are literal: **do not quote them**.
 Compose raw format preserves dollar signs, hashes, spaces and backslashes in
 passwords. Prefer a secret file for production. Never commit `.env`.
 
@@ -325,14 +329,14 @@ you need queued mail or generated keys. Never share one queue between replicas.
 For a consistent backup, stop the relay first, then snapshot or archive both
 named volumes preserving numeric ownership and permissions. For example, find
 the actual names with `docker volume ls`, substitute them below, and run from
-the repository (the local image must already exist):
+the repository (pull the image first):
 
 ```sh
 docker compose stop
 mkdir -p backup
 chmod 700 backup
-docker run --rm --entrypoint tar -v ACTUAL_QUEUE_VOLUME:/source:ro -v "$PWD/backup:/backup" postfix-smtp-relay:local -C /source -cpf /backup/queue.tar .
-docker run --rm --entrypoint tar -v ACTUAL_TLS_VOLUME:/source:ro -v "$PWD/backup:/backup" postfix-smtp-relay:local -C /source -cpf /backup/tls.tar .
+docker run --rm --entrypoint tar -v ACTUAL_QUEUE_VOLUME:/source:ro -v "$PWD/backup:/backup" ghcr.io/fiordhraoi/postfix-smtp-relay:latest -C /source -cpf /backup/queue.tar .
+docker run --rm --entrypoint tar -v ACTUAL_TLS_VOLUME:/source:ro -v "$PWD/backup:/backup" ghcr.io/fiordhraoi/postfix-smtp-relay:latest -C /source -cpf /backup/tls.tar .
 docker compose start
 ```
 
@@ -346,13 +350,27 @@ To update after reviewing changes and taking a backup:
 
 ```sh
 git pull --ff-only
-docker compose build --pull
+docker compose pull
 docker compose up -d
 docker compose logs --tail=100 smtp-relay
 ```
 
-Ubuntu tags and APT packages receive updates at build time. For controlled
-multi-site rollouts, build/test once in CI, scan the image, publish it to your
-registry and deploy the same immutable digest at each site. This repository
-does not automatically publish images or GitHub releases. Retain the previous
-image for rollback and check queue-format compatibility before downgrading.
+The [Test and publish workflow](.github/workflows/test.yml) builds a Linux amd64
+image, runs the integration suite against that exact image, and publishes it to
+GHCR only after all tests pass on main. Pull requests run tests without publishing.
+Tags include `latest` and `sha-<full-commit-sha>`. Rebuilding a commit may pick up
+new Ubuntu packages; use a digest for an immutable deployment.
+
+See [publishing, package visibility and image pinning](docs/PUBLISHING.md).
+For local development, use the source-build override:
+
+```sh
+docker compose -f compose.yaml -f compose.build.yaml build --pull
+docker compose -f compose.yaml -f compose.build.yaml up -d
+```
+
+The default deployment continues using GHCR unless that override is explicitly
+selected. Retain the previous image for rollback and check queue compatibility
+before downgrading. The source revision is recorded in the image's
+`org.opencontainers.image.revision` label; source is available from this
+repository at that revision. Project license text is included in the image.

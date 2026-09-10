@@ -1,13 +1,42 @@
-name: Test
-on: [push, pull_request]
+name: Test and publish
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: relay-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   test:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
       - run: python3 -m unittest discover -s tests -v
       - run: cp .env.example .env && docker compose config --quiet
-      - run: python3 tests/integration.py
+      - name: Build candidate image
+        run: docker build --pull --build-arg REVISION="$GITHUB_SHA" -t relay-ci:test .
+      - name: Test the exact candidate image
+        env:
+          RELAY_TEST_IMAGE: relay-ci:test
+        run: python3 -u tests/integration.py
+      - name: Publish tested image to GHCR
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.repository == 'Fiordhraoi/postfix-smtp-relay'
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          IMAGE=ghcr.io/fiordhraoi/postfix-smtp-relay
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          trap 'docker logout ghcr.io' EXIT
+          docker tag relay-ci:test "$IMAGE:sha-$GITHUB_SHA"
+          docker tag relay-ci:test "$IMAGE:latest"
+          docker push "$IMAGE:sha-$GITHUB_SHA"
+          docker push "$IMAGE:latest"
+          printf '### Published image\n\n`%s:sha-%s`\n\n`%s:latest`\n' "$IMAGE" "$GITHUB_SHA" "$IMAGE" >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,6 @@
+# Optional source-build override for development or unpublished changes.
+services:
+  smtp-relay:
+    build: .
+    image: postfix-smtp-relay:local
+    pull_policy: never

@@ -1,7 +1,6 @@
 services:
   smtp-relay:
-    build: .
-    image: postfix-smtp-relay:local
+    image: ghcr.io/fiordhraoi/postfix-smtp-relay:latest
     network_mode: host
     env_file:
       - path: .env

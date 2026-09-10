@@ -1,5 +1,6 @@
 """Run on a Docker Engine host: python3 tests/integration.py (builds image)."""
 import json
+import os
 import subprocess
 import time
 import uuid
@@ -10,7 +11,9 @@ prefix = 'relay-test-' + uuid.uuid4().hex[:8]
 containers = []
 network = prefix + '-net'
 volume = prefix + '-queue'
-image = prefix + ':test'
+# An explicitly supplied image is tested as-is and never removed by this suite.
+supplied_image = os.environ.get('RELAY_TEST_IMAGE')
+image = supplied_image or prefix + ':test'
 
 
 def docker(*args):
@@ -37,7 +40,10 @@ def ready(name):
 
 
 try:
-    docker('build', '-t', image, '.')
+    if supplied_image:
+        docker('image', 'inspect', image)
+    else:
+        docker('build', '-t', image, '.')
     docker('network', 'create', '--internal', network)
     docker('volume', 'create', volume)
     mock = prefix + '-mock'
@@ -87,5 +93,8 @@ try:
 finally:
     for name in reversed(containers):
         subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL)
-    for resource, name in [('volume', volume), ('network', network), ('image', image)]:
+    resources = [('volume', volume), ('network', network)]
+    if not supplied_image:
+        resources.append(('image', image))
+    for resource, name in resources:
         subprocess.run(['docker', resource, 'rm', name], stdout=subprocess.DEVNULL)
