@@ -23,7 +23,7 @@ these were fixed before the successful run. FSETID preserves Postfix's packaged
 setgid helper permissions during startup permission repair.
 
 Remaining site-specific checks: actual IPv4/IPv6 source-address preservation,
-firewall policy, administrator certificate trust/renewal, mounted production
+administrator certificate trust/renewal, mounted production
 secrets, NAT public IP and real Microsoft 365 connector delivery. The automated
 suite does not send mail to Microsoft 365 or certify your site's network.
 
