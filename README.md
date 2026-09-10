@@ -34,7 +34,7 @@ GitHub Actions has successfully built the image and passed the unit tests,
 Compose validation and live SMTP integration suite on Ubuntu 24.04.
 See the [successful validation run](https://github.com/Fiordhraoi/postfix-smtp-relay/actions/runs/34406643929)
 and [validation record](VALIDATION.md). Perform the site acceptance checks below
-before production rollout, including real client IPs, firewall rules, certificate
+before production rollout, including real client IPs, certificate
 trust and your Microsoft 365 connector.
 
 ## Quick start
@@ -42,7 +42,6 @@ trust and your Microsoft 365 connector.
 Use a dedicated Linux host (Ubuntu 24.04 recommended), rootful Docker Engine
 and Docker Compose **2.30.0 or newer** (needed for raw environment files).
 Ensure ports 25 and 587 are free; stop the old host Postfix service before deploying.
-Set firewall rules before starting the container.
 
 ```sh
 git clone https://github.com/Fiordhraoi/postfix-smtp-relay.git smtp-relay
@@ -185,12 +184,12 @@ and `secure` also apply Postfix certificate verification/name policies. Use
 `none` disables outbound TLS. Neither a mounted inbound certificate nor local
 AUTH configures certificate-based M365 connector authentication.
 
-## Docker networking and firewall
+## Docker networking
 
 The recommended deployment uses **native Linux host networking**. It shares
 the host network namespace, avoids Docker port publishing, NAT and userland
 proxies, and lets Postfix see the source IP arriving at the host. Upstream
-routers or firewalls may still SNAT traffic: verify the resulting address in
+routers may still SNAT traffic: verify the resulting address in
 Postfix's `connect from` log lines before trusting a subnet.
 
 Normal native Linux bridge published-port traffic using DNAT can preserve a
@@ -201,15 +200,6 @@ only after testing every relevant path with trusted and untrusted clients.
 Never compensate by trusting `172.17.0.0/16` or any entire bridge subnet.
 Docker Desktop's host networking is not equivalent to native Linux namespace
 sharing and is not this project's recommended production platform.
-
-Allow inbound TCP 25/587 only from intended device networks, VPNs or explicitly
-approved authenticated clients. Apply equivalent IPv6 firewall rules. No public
-Internet listener is required. Allow outbound DNS resolution and TCP to the
-upstream relay port. Restrict other devices from directly reaching external SMTP
-if that is part of your mail policy. Host mode uses the host INPUT firewall path;
-bridge-published ports require Docker-aware forwarding rules and may bypass
-ordinary UFW expectations. Network ACLs complement, rather than replace, Postfix
-relay restrictions. Do not expose the Docker API.
 
 Sources: [Docker host networking](https://docs.docker.com/engine/network/drivers/host/),
 [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/),
@@ -224,7 +214,7 @@ inbound connector from your organization's email server that trusts your site's
 dedicated static public NAT IP. No upstream username/password is used. Confirm
 the actual public egress IP, accepted sender domain, tenant MX target, connector
 scope and any TLS requirement with your M365 administrator. Allow TCP 25 through
-the ISP/firewall; some hosting providers block it. Configure SPF for authorized
+your ISP; some hosting providers block it. Configure SPF for authorized
 senders and review tenant anti-spam and sending limits. This does not bypass
 Microsoft restrictions on third-party hosted relay scenarios.
 
@@ -250,7 +240,7 @@ Image package downloads require Internet access; SMTP tests never contact M365.
 
 Before site rollout, test from a real allowed and disallowed device/VLAN and
 inspect source-IP logs. Check IPv6 separately if enabled. Verify real certificate
-trust, secret mounting, NAT public IP, firewall restrictions and connector
+trust, secret mounting, NAT public IP and connector
 delivery. The Docker test topology does not establish your production network's
 source-address behavior. Monitor disk space, queue age and delivery failures;
 health only checks the local process, both listeners and STARTTLS advertisement.
@@ -302,7 +292,7 @@ docker compose exec smtp-relay postcat -q QUEUE_ID
 `postcat` exposes message contents, so treat output as confidential. Deleting
 queued messages with `postsuper -d` is irreversible; use it only deliberately.
 
-Connection refused: check port conflicts, container health and firewall rules.
+Connection refused: check port conflicts, container health and the configured server address.
 Relay denied: compare actual logged client IP against the configured CIDRs; do
 not broaden trust to mask NAT. AUTH missing: first negotiate STARTTLS, then EHLO.
 AUTH failure: check username/realm, secret contents and recreate after rotation.
