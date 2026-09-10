@@ -4,7 +4,27 @@ A reusable SMTP relay for internal devices and applications. Ubuntu 24.04,
 Postfix and Cyrus SASL provide ports 25 and 587, optional LOGIN/PLAIN client
 authentication, inbound STARTTLS, and forwarding to one upstream SMTP server.
 There are no mailboxes, IMAP services, web interfaces or outbound credentials.
-MIT licensed.
+Licensed under GNU AGPL version 3 only (`AGPL-3.0-only`).
+
+## License
+
+Copyright (c) 2026 SMTP Relay Contributors.
+
+This project's original code, configuration and documentation are licensed under
+the GNU Affero General Public License, version 3 only. See [LICENSE](LICENSE)
+for the complete terms. The software is provided without warranty.
+
+Distributed covered derivatives must retain AGPL licensing and provide the
+corresponding source as required by the license. If you modify the program and
+users interact with the modified version over a network, section 13 requires a
+prominent offer of its corresponding source to those users at no charge.
+Source availability is owed to the relevant recipients/users; the license does
+not require every private modification to be published to the entire world.
+
+Postfix, Ubuntu and other separately packaged dependencies retain their own
+licenses. Merely using this relay to send email does not relicense client
+applications or email contents. Versions previously published under MIT remain
+available under those terms; this change does not revoke earlier grants.
 
 ## Validation status
 
