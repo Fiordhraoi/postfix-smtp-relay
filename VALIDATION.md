@@ -65,3 +65,28 @@ No implementation changes were needed. Tests used an internal Docker network
 without publishing SMTP ports or contacting Microsoft 365. These results verify
 local container behavior; they do not replace the site-specific production
 network, mounted-certificate/secret and Microsoft 365 checks listed above.
+
+## First GHCR image publication — 2026-09-10
+
+[GitHub Actions run](https://github.com/Fiordhraoi/postfix-smtp-relay/actions/runs/34501706838)
+passed unit tests, Compose validation and integration tests, then published the
+exact tested image for source revision
+`af48e3f7d2ff3528f37c52133d81bb4851b15096`.
+
+Published tags:
+
+- `ghcr.io/fiordhraoi/postfix-smtp-relay:latest`
+- `ghcr.io/fiordhraoi/postfix-smtp-relay:sha-af48e3f7d2ff3528f37c52133d81bb4851b15096`
+
+Verified image digest:
+`sha256:7c8a6ebc208da30e3008a65ec0d16c42d6f237b7831d1f3ecfaae62f6b4dc349`.
+
+An anonymous Docker pull from GHCR succeeded locally. No package visibility
+change was needed. Image labels correctly identified the source revision and
+AGPL-3.0-only license. The full integration suite then passed again against the
+downloaded image selected by digest, including SMTP/TLS/AUTH, relay restrictions,
+mock delivery and queue persistence.
+
+The GHCR-based Compose file and optional source-build override were validated
+locally. Current published platform: Linux amd64. This does not replace the
+site-specific checks above.
