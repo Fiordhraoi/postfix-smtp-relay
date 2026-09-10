@@ -169,34 +169,10 @@ see [certificate setup](../README.md#tls).
 Do not put quotes around values or spaces around `=`. Do not commit `.env`
 to GitHub. Save in nano with **Ctrl+O**, press **Enter**, then exit with **Ctrl+X**.
 
-## 5. Restrict access before starting the relay
+## 5. Check that the SMTP ports are free
 
-The supplied configuration uses Linux host networking. Ports 25 and 587 will
-listen on the server's interfaces. Have your administrator allow inbound TCP
-25/587 only from intended device networks and apply equivalent IPv6 rules.
-Do not forward these ports from the public Internet.
-
-For a **fresh dedicated server using UFW**, the following example permits one
-device. Replace the device IP first. If connected over SSH, allow your actual
-SSH port before enabling UFW; the `OpenSSH` profile below assumes port 22.
-If the server already has a firewall policy, have its administrator integrate
-the rules instead of replacing that policy.
-
-```bash
-sudo apt install -y ufw
-sudo ufw allow OpenSSH
-sudo ufw default deny incoming
-sudo ufw default allow outgoing
-sudo ufw allow from 10.10.1.50 to any port 25 proto tcp
-sudo ufw allow from 10.10.1.50 to any port 587 proto tcp
-sudo ufw enable
-sudo ufw status verbose
-```
-
-Repeat the two device rules for additional approved addresses. These firewall
-examples match the single-device example in step 4. Check upstream network
-firewalls too. Do not add broad existing allow rules or trust Docker bridge
-subnets to work around a connection failure.
+The supplied configuration uses Linux host networking. Postfix uses the client
+IP and your `TRUSTED_NETWORKS` settings to decide who may relay anonymously.
 
 Check whether another program already owns the SMTP ports:
 
@@ -288,7 +264,7 @@ A plain `restart` does not load changes to `.env`.
 | Image pull fails | Check Internet/DNS access, package visibility and Linux amd64 support |
 | Container exits or keeps restarting | Read logs for a missing/invalid setting or TLS error |
 | Address already in use | Check step 5 for another SMTP listener |
-| Device cannot connect | Check server address, port and both host/network firewalls |
+| Device cannot connect | Check server address, port and whether the relay is healthy |
 | Relay access denied | Compare the logged source IP with `TRUSTED_NETWORKS` |
 | AUTH unavailable | Enable AUTH, negotiate STARTTLS, and check certificate trust |
 | Mail is deferred | Check upstream DNS, outbound TCP 25 and M365 connector/public IP |
